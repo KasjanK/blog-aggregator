@@ -1,15 +1,22 @@
 package main
 
 import (
+	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"log"
 	"os"
+	"time"
 
 	"github.com/KasjanK/blog-aggregator/internal/config"
+	"github.com/KasjanK/blog-aggregator/internal/database"
+	"github.com/google/uuid"
+	_ "github.com/lib/pq"
 )
 
 type state struct {
+	db 	*database.Queries
 	cfg *config.Config
 }
 
@@ -25,11 +32,9 @@ type commands struct {
 func (c *commands) run(s *state, cmd command) error {
 	command, ok := c.handlerFunctions[cmd.Name]
 	if ok {
-		command(s, cmd)
-	} else {
-		return errors.New("Unknown command")
+		return command(s, cmd)
 	}
-	return nil
+	return errors.New("Unknown command")
 }
 
 func (c *commands) register(name string, f func(*state, command) error) {
@@ -42,11 +47,46 @@ func handlerLogin(s *state, cmd command) error {
 	}
 
 	name := cmd.Arguments[0]
-	err := s.cfg.SetUser(name)
+
+	getUser, err := s.db.GetUser(context.Background(), name)
+	if err != nil {
+		return fmt.Errorf("couldnt find user: %w", err)
+	}
+
+	err = s.cfg.SetUser(name)
 	if err != nil {
 		return fmt.Errorf("couldn't set current user: %w", err)
 	}
-	fmt.Printf("username has been set to %s", name)
+
+	fmt.Printf("username has been set to %s", getUser.Name)
+	return nil
+}
+
+func handlerRegister(s *state, cmd command) error {
+	if len(cmd.Arguments) != 1 {
+		return fmt.Errorf("usage: %s <name>", cmd.Name)
+	}
+
+	name := cmd.Arguments[0] 
+	newUser, err := s.db.CreateUser(context.Background(), 
+		database.CreateUserParams{
+			ID: uuid.New(),
+			CreatedAt: time.Now(),
+			UpdatedAt: time.Now(),
+			Name: name,
+		},
+	)
+	if err != nil {
+		return fmt.Errorf("could not create user: %w", err)
+	}
+
+	err = s.cfg.SetUser(newUser.Name)
+	if err != nil {
+		return fmt.Errorf("could not set current user: %w", err)
+	}
+
+	fmt.Printf("user was created. ID: %d, created at: %s, updated at: %s, name: %s", newUser.ID, newUser.CreatedAt, newUser.UpdatedAt, newUser.Name)
+
 	return nil
 }
 
@@ -56,10 +96,21 @@ func main() {
 		log.Fatalf("error reading config: %v", err)
 	}
 	
-	newState := &state{cfg: &cfg}
+	db, err := sql.Open("postgres", cfg.DatabaseUrl)
+	if err != nil {
+		log.Fatal("error connecting to db :v", err)
+	}
+	defer db.Close()
+
+	dbQueries := database.New(db)
+
+	programState := &state{db: dbQueries, cfg: &cfg}
+
 	cmds := commands{handlerFunctions: make(map[string]func(*state, command) error)}
 
-	cmds.register("login", handlerLogin)
+	cmds.register("login", handlerLogin)	
+	cmds.register("register", handlerRegister)
+
 
 	userArgs := os.Args
 
@@ -71,7 +122,9 @@ func main() {
 	cmdArgs := os.Args[2:]
 	
 	cmd := command{Name: cmdName, Arguments: cmdArgs}
-	cmds.run(newState, cmd)
+	if err := cmds.run(programState, cmd); err != nil {
+		log.Fatal(err)
+	}
 	
 }
 
