@@ -90,6 +90,31 @@ func handlerRegister(s *state, cmd command) error {
 	return nil
 }
 
+func handlerReset(s *state, cmd command) error {
+	err := s.db.DeleteAllUsers(context.Background())
+	if err != nil {
+		return fmt.Errorf("could not delete all users: %w", err)
+	}
+	fmt.Println("successfully deleted all users")
+	return nil
+}
+
+func handlerUsers(s *state, cmd command) error {
+	usersList, err := s.db.GetUsers(context.Background())
+	if err != nil {
+		return fmt.Errorf("could not get users: %w", err)
+	}
+	
+	for _, user := range usersList {
+		if user.Name == s.cfg.CurrentUserName {
+			fmt.Printf("* %s (current)\n", user.Name)
+			continue
+		}
+		fmt.Printf("* %s\n", user.Name)
+	}
+	return nil
+}
+
 func main() {
 	cfg, err := config.Read()
 	if err != nil {
@@ -110,6 +135,8 @@ func main() {
 
 	cmds.register("login", handlerLogin)	
 	cmds.register("register", handlerRegister)
+	cmds.register("reset", handlerReset)
+	cmds.register("users", handlerUsers)
 
 
 	userArgs := os.Args
