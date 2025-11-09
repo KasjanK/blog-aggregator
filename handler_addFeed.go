@@ -9,17 +9,13 @@ import (
 	"github.com/google/uuid"
 )
 
-func handlerAddFeed(s *state, cmd command) error {
+func handlerAddFeed(s *state, cmd command, user database.User) error {
 	if len(cmd.Arguments) != 2 {
 		return fmt.Errorf("usage: %s <name>", cmd.Name)
 	}
 
 	feedName := cmd.Arguments[0]
 	feedUrl := cmd.Arguments[1]
-	currentUser, err := s.db.GetUser(context.Background(), s.cfg.CurrentUserName)
-	if err != nil {
-		return fmt.Errorf("couldn't get user: %w", err)
-	}
 	
 	feed, err := s.db.CreateFeed(context.Background(), database.CreateFeedParams{
 		ID: uuid.New(),
@@ -27,7 +23,7 @@ func handlerAddFeed(s *state, cmd command) error {
 		UpdatedAt: time.Now(),
 		Name: feedName,
 		Url: feedUrl,
-		UserID: currentUser.ID,
+		UserID: user.ID,
 	})
 	if err != nil {
 		return fmt.Errorf("error creating feed: %w", err)
@@ -37,7 +33,7 @@ func handlerAddFeed(s *state, cmd command) error {
 		ID: uuid.New(),
 		CreatedAt: time.Now(),
 		UpdatedAt: time.Now(),
-		UserID: currentUser.ID,
+		UserID: user.ID,
 		FeedID: feed.ID,
 	})
 	if err != nil {
@@ -45,7 +41,7 @@ func handlerAddFeed(s *state, cmd command) error {
 	}
 
 	fmt.Println("Feed created successfully!")
-	printFeed(feed, currentUser)
+	printFeed(feed, user)
 	fmt.Println()
 	fmt.Println("Feed followed successfully!")
 	printFeedFollow(feedFollow.UserName, feedFollow.FeedName)
@@ -59,5 +55,5 @@ func printFeed(feed database.Feed, user database.User) {
 	fmt.Printf("* Updated:       %v\n", feed.UpdatedAt)
 	fmt.Printf("* Name:          %s\n", feed.Name)
 	fmt.Printf("* URL:           %s\n", feed.Url)
-	fmt.Printf("* UserID:        %s\n", feed.UserID)
+	fmt.Printf("* User:        	 %s\n", user.Name)
 }
