@@ -7,7 +7,7 @@ Install the latest [Go toolchain](https://golang.org/dl/) and a local Postgres d
 Install `gator` with:
 
 ```bash
-go install .
+go install go install github.com/KasjanK/blog-aggregator/cmd/gator@latest
 ```
 
 ## Config
